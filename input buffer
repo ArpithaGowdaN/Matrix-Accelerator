@@ -1,0 +1,96 @@
+`timescale 1ns/1ps
+//=============================================================
+// Module : input_buffer.v
+// Project : 4x4 Systolic Array Matrix Multiplier
+// Member  : M2 - Buffers + Integration
+// Desc    : Skewed input feeding logic. Staggers rows of A
+//           and columns of B so each PE receives correct
+//           data at the correct clock cycle.
+//           Row i delayed by i cycles.
+//           Col j delayed by j cycles.
+//=============================================================
+
+module input_buffer #(
+    parameter DATA_W = 8,
+    parameter N      = 4
+)(
+    input  wire                    clk,
+    input  wire                    rst,
+    input  wire [N*N*DATA_W-1:0]   A_flat,
+    input  wire [N*N*DATA_W-1:0]   B_flat,
+
+    // Skewed outputs → directly into systolic_array ports
+    output reg  [DATA_W-1:0]       a_feed_0,
+    output reg  [DATA_W-1:0]       a_feed_1,
+    output reg  [DATA_W-1:0]       a_feed_2,
+    output reg  [DATA_W-1:0]       a_feed_3,
+    output reg  [DATA_W-1:0]       b_feed_0,
+    output reg  [DATA_W-1:0]       b_feed_1,
+    output reg  [DATA_W-1:0]       b_feed_2,
+    output reg  [DATA_W-1:0]       b_feed_3
+);
+
+    // ── Unpack A and B from flat arrays ───────────────────────
+    wire [DATA_W-1:0] A [0:N-1][0:N-1];
+    wire [DATA_W-1:0] B [0:N-1][0:N-1];
+
+    genvar gi, gj;
+    generate
+        for (gi = 0; gi < N; gi = gi + 1) begin : row
+            for (gj = 0; gj < N; gj = gj + 1) begin : col
+                assign A[gi][gj] = A_flat[(gi*N+gj)*DATA_W +: DATA_W];
+                assign B[gi][gj] = B_flat[(gi*N+gj)*DATA_W +: DATA_W];
+            end
+        end
+    endgenerate
+
+    // ── Shift registers for A row skewing ────────────────────
+    // Row 0: no delay
+    // Row 1: 1 cycle delay  → 1 flip flop
+    // Row 2: 2 cycle delay  → 2 flip flops
+    // Row 3: 3 cycle delay  → 3 flip flops
+    reg [DATA_W-1:0] a1_s0;
+    reg [DATA_W-1:0] a2_s0, a2_s1;
+    reg [DATA_W-1:0] a3_s0, a3_s1, a3_s2;
+
+    // ── Shift registers for B column skewing ─────────────────
+    reg [DATA_W-1:0] b1_s0;
+    reg [DATA_W-1:0] b2_s0, b2_s1;
+    reg [DATA_W-1:0] b3_s0, b3_s1, b3_s2;
+
+    always @(posedge clk) begin
+        if (rst) begin
+            a1_s0 <= 0;
+            a2_s0 <= 0; a2_s1 <= 0;
+            a3_s0 <= 0; a3_s1 <= 0; a3_s2 <= 0;
+            b1_s0 <= 0;
+            b2_s0 <= 0; b2_s1 <= 0;
+            b3_s0 <= 0; b3_s1 <= 0; b3_s2 <= 0;
+        end
+        else begin
+            // A row delays
+            a1_s0 <= A[1][0];
+            a2_s0 <= A[2][0]; a2_s1 <= a2_s0;
+            a3_s0 <= A[3][0]; a3_s1 <= a3_s0; a3_s2 <= a3_s1;
+
+            // B column delays
+            b1_s0 <= B[0][1];
+            b2_s0 <= B[0][2]; b2_s1 <= b2_s0;
+            b3_s0 <= B[0][3]; b3_s1 <= b3_s0; b3_s2 <= b3_s1;
+        end
+    end
+
+    // ── Output assignments ────────────────────────────────────
+    always @(*) begin
+        a_feed_0 = A[0][0];  // Row 0: no delay
+        a_feed_1 = a1_s0;    // Row 1: 1 cycle
+        a_feed_2 = a2_s1;    // Row 2: 2 cycles
+        a_feed_3 = a3_s2;    // Row 3: 3 cycles
+
+        b_feed_0 = B[0][0];  // Col 0: no delay
+        b_feed_1 = b1_s0;    // Col 1: 1 cycle
+        b_feed_2 = b2_s1;    // Col 2: 2 cycles
+        b_feed_3 = b3_s2;    // Col 3: 3 cycles
+    end
+
+endmodule
