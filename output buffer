@@ -1,0 +1,67 @@
+`timescale 1ns/1ps
+//=============================================================
+// Module : output_buffer.v
+// Project : 4x4 Systolic Array Matrix Multiplier
+// Member  : M2 - Buffers + Integration
+// Desc    : Captures all 16 PE accumulator values into C_flat
+//           when done signal fires from systolic_array.
+//           Outputs valid=1 to signal result is ready.
+//=============================================================
+
+module output_buffer #(
+    parameter ACC_W = 32,
+    parameter N     = 4
+)(
+    input  wire                    clk,
+    input  wire                    rst,
+    input  wire                    done,
+
+    // 16 accumulator inputs — names match systolic_array outputs exactly
+    input  wire [ACC_W-1:0]        acc_00, acc_01, acc_02, acc_03,
+    input  wire [ACC_W-1:0]        acc_10, acc_11, acc_12, acc_13,
+    input  wire [ACC_W-1:0]        acc_20, acc_21, acc_22, acc_23,
+    input  wire [ACC_W-1:0]        acc_30, acc_31, acc_32, acc_33,
+
+    // Flat output — 16 x 32 = 512 bits
+    output reg  [N*N*ACC_W-1:0]    C_flat,
+
+    // Valid flag — high when C_flat holds real data
+    output reg                     valid
+);
+
+    always @(posedge clk) begin
+        if (rst) begin
+            C_flat <= 0;
+            valid  <= 0;
+        end
+        else if (done) begin
+            // Capture all 16 results — row major order
+            // Row 0
+            C_flat[0*ACC_W  +: ACC_W] <= acc_00;
+            C_flat[1*ACC_W  +: ACC_W] <= acc_01;
+            C_flat[2*ACC_W  +: ACC_W] <= acc_02;
+            C_flat[3*ACC_W  +: ACC_W] <= acc_03;
+            // Row 1
+            C_flat[4*ACC_W  +: ACC_W] <= acc_10;
+            C_flat[5*ACC_W  +: ACC_W] <= acc_11;
+            C_flat[6*ACC_W  +: ACC_W] <= acc_12;
+            C_flat[7*ACC_W  +: ACC_W] <= acc_13;
+            // Row 2
+            C_flat[8*ACC_W  +: ACC_W] <= acc_20;
+            C_flat[9*ACC_W  +: ACC_W] <= acc_21;
+            C_flat[10*ACC_W +: ACC_W] <= acc_22;
+            C_flat[11*ACC_W +: ACC_W] <= acc_23;
+            // Row 3
+            C_flat[12*ACC_W +: ACC_W] <= acc_30;
+            C_flat[13*ACC_W +: ACC_W] <= acc_31;
+            C_flat[14*ACC_W +: ACC_W] <= acc_32;
+            C_flat[15*ACC_W +: ACC_W] <= acc_33;
+
+            valid <= 1;
+        end
+        else begin
+            valid <= 0;
+        end
+    end
+
+endmodule
