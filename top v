@@ -1,0 +1,114 @@
+`timescale 1ns/1ps
+//=============================================================
+// Module : top.v
+// Project : 4x4 Systolic Array Matrix Multiplier
+// Member  : M2 - Buffers + Integration
+// Desc    : Top level module. Instantiates input_buffer,
+//           systolic_array, and output_buffer and connects
+//           them all together with wires.
+//=============================================================
+
+module top #(
+    parameter DATA_W = 8,
+    parameter ACC_W  = 32,
+    parameter N      = 4
+)(
+    input  wire                         clk,
+    input  wire                         rst,
+    input  wire                         start,
+
+    // Flat input matrices
+    input  wire [N*N*DATA_W-1:0]        A_flat,  // 128 bits
+    input  wire [N*N*DATA_W-1:0]        B_flat,  // 128 bits
+
+    // Flat output matrix
+    output wire [N*N*ACC_W-1:0]         C_flat,  // 512 bits
+
+    // Status signals
+    output wire                         done,
+    output wire                         valid
+);
+
+    // ── Wires connecting input_buffer → systolic_array ───────
+    wire [DATA_W-1:0] a_feed_0, a_feed_1, a_feed_2, a_feed_3;
+    wire [DATA_W-1:0] b_feed_0, b_feed_1, b_feed_2, b_feed_3;
+
+    // ── Wires connecting systolic_array → output_buffer ──────
+    wire [ACC_W-1:0] acc_00, acc_01, acc_02, acc_03;
+    wire [ACC_W-1:0] acc_10, acc_11, acc_12, acc_13;
+    wire [ACC_W-1:0] acc_20, acc_21, acc_22, acc_23;
+    wire [ACC_W-1:0] acc_30, acc_31, acc_32, acc_33;
+
+    wire done_internal;
+
+    // ── Instantiate input_buffer ──────────────────────────────
+    input_buffer #(
+        .DATA_W(DATA_W),
+        .N     (N)
+    ) u_input_buffer (
+        .clk     (clk),
+        .rst     (rst),
+        .A_flat  (A_flat),
+        .B_flat  (B_flat),
+        .a_feed_0(a_feed_0),
+        .a_feed_1(a_feed_1),
+        .a_feed_2(a_feed_2),
+        .a_feed_3(a_feed_3),
+        .b_feed_0(b_feed_0),
+        .b_feed_1(b_feed_1),
+        .b_feed_2(b_feed_2),
+        .b_feed_3(b_feed_3)
+    );
+
+    // ── Instantiate systolic_array ────────────────────────────
+    systolic_array #(
+        .DATA_W(DATA_W),
+        .ACC_W (ACC_W),
+        .N     (N)
+    ) u_systolic_array (
+        .clk     (clk),
+        .rst     (rst),
+        .start   (start),
+        .a_feed_0(a_feed_0),
+        .a_feed_1(a_feed_1),
+        .a_feed_2(a_feed_2),
+        .a_feed_3(a_feed_3),
+        .b_feed_0(b_feed_0),
+        .b_feed_1(b_feed_1),
+        .b_feed_2(b_feed_2),
+        .b_feed_3(b_feed_3),
+        .acc_00  (acc_00), .acc_01(acc_01),
+        .acc_02  (acc_02), .acc_03(acc_03),
+        .acc_10  (acc_10), .acc_11(acc_11),
+        .acc_12  (acc_12), .acc_13(acc_13),
+        .acc_20  (acc_20), .acc_21(acc_21),
+        .acc_22  (acc_22), .acc_23(acc_23),
+        .acc_30  (acc_30), .acc_31(acc_31),
+        .acc_32  (acc_32), .acc_33(acc_33),
+        .done    (done_internal)
+    );
+
+    // ── Instantiate output_buffer ─────────────────────────────
+    output_buffer #(
+        .ACC_W(ACC_W),
+        .N    (N)
+    ) u_output_buffer (
+        .clk   (clk),
+        .rst   (rst),
+        .done  (done_internal),
+        .acc_00(acc_00), .acc_01(acc_01),
+        .acc_02(acc_02), .acc_03(acc_03),
+        .acc_10(acc_10), .acc_11(acc_11),
+        .acc_12(acc_12), .acc_13(acc_13),
+        .acc_20(acc_20), .acc_21(acc_21),
+        .acc_22(acc_22), .acc_23(acc_23),
+        .acc_30(acc_30), .acc_31(acc_31),
+        .acc_32(acc_32), .acc_33(acc_33),
+        .C_flat(C_flat),
+        .valid (valid)
+    );
+
+    // done visible at top level
+    assign done = done_internal;
+
+endmodule
